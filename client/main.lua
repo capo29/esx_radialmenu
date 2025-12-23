@@ -1,58 +1,132 @@
-ESX = nil
-
-Citizen.CreateThread(function()
-	while ESX == nil do
-		TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
-		Citizen.Wait(0)
-	end
-
-	while ESX.GetPlayerData().job == nil do
-		Citizen.Wait(100)
-	end
-
-	ESX.PlayerData = ESX.GetPlayerData()
-end)
-
 local inRadialMenu = false
 local IsDown = false
+local playerRoles = {}
+local permissionRequestId = 0
+local permissionCallbacks = {}
 
-RegisterNetEvent("esx:playerLoaded")
-AddEventHandler("esx:playerLoaded", function(xPlayer) ESX.PlayerData = xPlayer end)
+local function tableContains(tbl, value)
+    for _, item in ipairs(tbl) do
+        if item == value then
+            return true
+        end
+    end
+    return false
+end
 
-RegisterNetEvent("esx:setJob")
-AddEventHandler("esx:setJob", function(job) ESX.PlayerData.job = job end)
+local function mergeRoles()
+    local roles = {}
+    for _, role in ipairs(Config.DefaultRoles) do
+        if not tableContains(roles, role) then
+            roles[#roles + 1] = role
+        end
+    end
+    for _, role in ipairs(playerRoles) do
+        if not tableContains(roles, role) then
+            roles[#roles + 1] = role
+        end
+    end
+    return roles
+end
+
+local function hasRole(role)
+    return tableContains(playerRoles, role) or tableContains(Config.DefaultRoles, role)
+end
+
+local function requestPermissions(cb)
+    permissionRequestId = permissionRequestId + 1
+    if cb then
+        permissionCallbacks[permissionRequestId] = cb
+    end
+    TriggerServerEvent('qb-radialmenu:server:requestPermissions', permissionRequestId)
+end
+
+local function getClosestVehicle(radius)
+    local ped = PlayerPedId()
+    local coords = GetEntityCoords(ped)
+    local vehicle = GetClosestVehicle(coords.x, coords.y, coords.z, radius or 10.0, 0, 70)
+    if vehicle == 0 then
+        return nil
+    end
+    return vehicle
+end
+
+local function getClosestPlayer()
+    local players = GetActivePlayers()
+    local closestPlayer = -1
+    local closestDistance = -1
+    local ped = PlayerPedId()
+    local coords = GetEntityCoords(ped)
+
+    for _, player in ipairs(players) do
+        local target = GetPlayerPed(player)
+        if target ~= ped then
+            local targetCoords = GetEntityCoords(target)
+            local distance = #(coords - targetCoords)
+            if closestDistance == -1 or distance < closestDistance then
+                closestPlayer = player
+                closestDistance = distance
+            end
+        end
+    end
+    return closestPlayer, closestDistance
+end
+
+RegisterNetEvent('qb-radialmenu:client:setPermissions', function(requestId, roles)
+    playerRoles = roles or {}
+    if permissionCallbacks[requestId] then
+        permissionCallbacks[requestId]()
+        permissionCallbacks[requestId] = nil
+    end
+end)
+
+Citizen.CreateThread(function()
+    requestPermissions()
+end)
 
 RegisterNetEvent('esx_ambulancejob:revive', function(pw)
     IsDown = false
 end)
 
+AddEventHandler('playerSpawned', function()
+    IsDown = false
+end)
+
+AddEventHandler('baseevents:onPlayerDied', function()
+    IsDown = true
+end)
+
+AddEventHandler('baseevents:onPlayerKilled', function()
+    IsDown = true
+end)
+
 RegisterCommand('_rad', function()
     if not IsPauseMenuActive() and not inRadialMenu then
-        openRadial(true)
-        SetCursorLocation(0.5, 0.5)
+        local opened = false
+        requestPermissions(function()
+            if opened then return end
+            openRadial(true)
+            SetCursorLocation(0.5, 0.5)
+            opened = true
+        end)
+
+        SetTimeout(250, function()
+            if not opened then
+                openRadial(true)
+                SetCursorLocation(0.5, 0.5)
+                opened = true
+            end
+        end)
     end
 end)
 
-RegisterKeyMapping('_rad', 'Open Radial Menu', 'keyboard', 'OEM_3')
-
-local function IsPolice()
-    return (ESX.PlayerData.job.name == "police" or ESX.PlayerData.job.name == "sheriff")
-end
-
-AddEventHandler('esx:onPlayerDeath', function(reason)
-	IsDown = true
-end)
+RegisterKeyMapping('_rad', 'Open Radial Menu', 'keyboard', 'M')
 
 local ofcDownAdded = false
 
 function setupSubItems()
+    local roles = mergeRoles()
 
-    PlayerData = ESX.GetPlayerData()
-    if PlayerData.job.name == 'sheriff' then
-        PlayerData.job.name = 'police'
-    end
-
-    if (IsDown and IsPolice()) then
+    if (IsDown and hasRole("police")) then
         if not ofcDownAdded then
             temptable = {
                 id = 'officerdown',
@@ -79,11 +153,15 @@ function setupSubItems()
         -- print('not down or police')
     end
 
-    if Config.JobInteractions[PlayerData.job.name] ~= nil and next(Config.JobInteractions[PlayerData.job.name]) ~= nil then
-        Config.MenuItems[4].items = Config.JobInteractions[PlayerData.job.name]
-    else 
-        Config.MenuItems[4].items = {}
+    local mergedInteractions = {}
+    for _, role in ipairs(roles) do
+        if Config.RoleInteractions[role] ~= nil and next(Config.RoleInteractions[role]) ~= nil then
+            for _, item in ipairs(Config.RoleInteractions[role]) do
+                mergedInteractions[#mergedInteractions + 1] = item
+            end
+        end
     end
+    Config.MenuItems[4].items = mergedInteractions
 
     local Vehicle = GetVehiclePedIsIn(PlayerPedId())
 
@@ -230,10 +308,10 @@ AddEventHandler('qb-radialmenu:client:openDoor', function(data)
     if IsPedInAnyVehicle(ped, false) then
         closestVehicle = GetVehiclePedIsIn(ped)
     else
-        closestVehicle = ESX.Game.GetClosestVehicle()
+        closestVehicle = getClosestVehicle()
     end
 
-    if closestVehicle ~= 0 then
+    if closestVehicle ~= nil and closestVehicle ~= 0 then
         if closestVehicle ~= GetVehiclePedIsIn(ped) then
             local plate = GetVehicleNumberPlateText(closestVehicle)
             if GetVehicleDoorAngleRatio(closestVehicle, door) > 0.0 then

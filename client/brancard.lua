@@ -7,6 +7,27 @@ local ValidVIEKELS = {
     "emsf",
 }
 
+local function getClosestPlayer()
+    local players = GetActivePlayers()
+    local closestPlayer = -1
+    local closestDistance = -1
+    local ped = PlayerPedId()
+    local coords = GetEntityCoords(ped)
+
+    for _, player in ipairs(players) do
+        local target = GetPlayerPed(player)
+        if target ~= ped then
+            local targetCoords = GetEntityCoords(target)
+            local distance = #(coords - targetCoords)
+            if closestDistance == -1 or distance < closestDistance then
+                closestPlayer = player
+                closestDistance = distance
+            end
+        end
+    end
+    return closestPlayer, closestDistance
+end
+
 function CheckForVehicles()
     local PlayerPed = PlayerPedId()
     local PlayerPos = GetEntityCoords(PlayerPed)
@@ -185,7 +206,7 @@ function LayOnBrancard()
     local PlayerPos = GetEntityCoords(PlayerPed)
     local Object = GetClosestObjectOfType(PlayerPos.x, PlayerPos.y, PlayerPos.z, 3.0, GetHashKey("prop_ld_binbag_01"), false, false, false)
     -- local player, distance = GetClosestPlayer()
-    local player, distance = ESX.Game.GetClosestPlayer()
+    local player, distance = getClosestPlayer()
 
     if player == -1 then
         LoadAnim(inBedDicts)
@@ -308,7 +329,7 @@ end)
 function AttachToBrancard()
     local PlayerPed = PlayerPedId()
     -- local ClosestPlayer, distance = GetClosestPlayer()
-    local ClosestPlayer, distance = ESX.Game.GetClosestPlayer()
+    local ClosestPlayer, distance = getClosestPlayer()
     local PlayerPed = PlayerPedId()
     local PlayerPos = GetEntityCoords(PlayerPed)
 
