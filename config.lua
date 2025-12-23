@@ -1,5 +1,25 @@
 Config = {}
 
+-- Permission driven access to role-based radial items. A player only needs
+-- one of the configured permission checks (ACE or Discord role) to receive
+-- the matching role's menu entries.
+Config.PermissionGroups = {
+    -- Example: add `add_ace identifier.steam:110000112345678 radial.police allow`
+    police = {
+        ace = 'radial.police',
+        discordRoles = { -- Discord role IDs, checked via discord_perms or Badger_Discord_API if present
+        }
+    },
+    ambulance = {
+        ace = 'radial.ems',
+        discordRoles = {
+        }
+    }
+}
+
+-- Roles that should always be available, regardless of permissions.
+Config.DefaultRoles = {}
+
 Config.MenuItems = {
     [1] = {
         id = 'citizen',
@@ -456,7 +476,7 @@ Config.MenuItems = {
     }
 }
 
-Config.JobInteractions = {
+Config.RoleInteractions = {
     ["ambulance"] = { -- pb-ambulancejob:EMSbed pb-ambulancejob:EMSrevive
         {
             id = 'statuscheck',

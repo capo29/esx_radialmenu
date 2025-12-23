@@ -1,6 +1,8 @@
 local inTrunk = false
 local isKidnapped = false
 local isKidnapping = false
+local trunkBusyRequests = {}
+local trunkBusyRequestId = 0
 
 local disabledTrunk = {
     [1] = "penetrator",
@@ -43,6 +45,40 @@ function disabledCarCheck(veh)
         end
     end
     return false
+end
+
+local function requestTrunkBusy(plate, cb)
+    trunkBusyRequestId = trunkBusyRequestId + 1
+    trunkBusyRequests[trunkBusyRequestId] = cb
+    TriggerServerEvent('qb-trunk:server:requestTrunkBusy', plate, trunkBusyRequestId)
+end
+
+RegisterNetEvent('qb-trunk:client:receiveTrunkBusy', function(requestId, isBusy)
+    if trunkBusyRequests[requestId] then
+        trunkBusyRequests[requestId](isBusy)
+        trunkBusyRequests[requestId] = nil
+    end
+end)
+
+local function getClosestPlayer()
+    local players = GetActivePlayers()
+    local closestPlayer = -1
+    local closestDistance = -1
+    local ped = PlayerPedId()
+    local coords = GetEntityCoords(ped)
+
+    for _, player in ipairs(players) do
+        local target = GetPlayerPed(player)
+        if target ~= ped then
+            local targetCoords = GetEntityCoords(target)
+            local distance = #(coords - targetCoords)
+            if closestDistance == -1 or distance < closestDistance then
+                closestPlayer = player
+                closestDistance = distance
+            end
+        end
+    end
+    return closestPlayer, closestDistance
 end
 
 RegisterNetEvent('qb-kidnapping:client:SetKidnapping')
@@ -121,8 +157,7 @@ end)
 
 RegisterNetEvent('qb-trunk:client:KidnapTrunk')
 AddEventHandler('qb-trunk:client:KidnapTrunk', function()
-    closestPlayer, distance = ESX.Game.GetClosestPlayer()
-    local closestPlayerPed = GetPlayerPed(closestPlayer)
+    local closestPlayer, distance = getClosestPlayer()
     if (distance ~= -1 and distance < 2) then
         if isKidnapping then
             local closestVehicle = getNearestVeh()
@@ -147,7 +182,7 @@ AddEventHandler('qb-trunk:client:KidnapGetIn', function(veh)
     local plate = GetVehicleNumberPlateText(closestVehicle)
 
     if Config.TrunkClasses[vehClass].allowed then
-        ESX.TriggerServerCallback('qb-trunk:server:getTrunkBusy', function(isBusy)
+        requestTrunkBusy(plate, function(isBusy)
             if not disabledCarCheck(closestVehicle) then
                 if not inTrunk then
                     if not isBusy then
@@ -221,7 +256,7 @@ AddEventHandler('qb-trunk:client:GetIn', function(isKidnapped)
         local vehClass = GetVehicleClass(closestVehicle)
         local plate = GetVehicleNumberPlateText(closestVehicle)
         if Config.TrunkClasses[vehClass].allowed then
-            ESX.TriggerServerCallback('qb-trunk:server:getTrunkBusy', function(isBusy)
+            requestTrunkBusy(plate, function(isBusy)
                 if not disabledCarCheck(closestVehicle) then
                     if not inTrunk then
                         if not isBusy then

@@ -1,13 +1,12 @@
 fx_version 'cerulean'
 game 'gta5'
 
-description 'QB-RadialMenu REWORKED FOR ESX BY aymantv.tebex.io'
+description 'QB-RadialMenu Standalone with ACE/Discord permissions'
 version '1.0.0'
 
 ui_page 'html/index.html'
 
 shared_scripts { 
-	-- '@es_extended/imports.lua', -- uncomment this if you're using ESX Legacy | leave it commented if you're using ESX 1.2 or below
 	'config.lua'
 }
 

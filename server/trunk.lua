@@ -2,14 +2,18 @@ local trunkBusy = {}
 
 RegisterServerEvent('qb-trunk:server:setTrunkBusy')
 AddEventHandler('qb-trunk:server:setTrunkBusy', function(plate, busy)
-    trunkBusy[plate] = busy
+    if busy then
+        trunkBusy[plate] = true
+    else
+        trunkBusy[plate] = nil
+    end
 end)
 
-ESX.RegisterServerCallback('qb-trunk:server:getTrunkBusy', function(source, cb, plate)
-    if trunkBusy[plate] then
-        cb(true)
-    end
-    cb(false)
+RegisterNetEvent('qb-trunk:server:requestTrunkBusy', function(plate, requestId)
+    local src = source
+    if type(requestId) ~= 'number' then return end
+    local isBusy = trunkBusy[plate] == true
+    TriggerClientEvent('qb-trunk:client:receiveTrunkBusy', src, requestId, isBusy)
 end)
 
 RegisterServerEvent('qb-trunk:server:KidnapTrunk')
@@ -25,4 +29,3 @@ end)
 RegisterCommand("putintrunk", function(source, args, rawCommand) 
     TriggerClientEvent('qb-trunk:server:KidnapTrunk', source)
 end)
-
